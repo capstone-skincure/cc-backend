@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+tensorflow
+opencv-python
+google-cloud-storage
+google-cloud-firestore
+pandas
+google-auth

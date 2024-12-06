@@ -1,161 +1,166 @@
 import os
-import base64
 import io
-import numpy as np
-import cv2
+import json
 import tensorflow as tf
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel
-from google.cloud import storage, firestore
-from tensorflow.keras.utils import get_custom_objects
-from tensorflow.keras.models import load_model
-from model import CustomCNN
+from flask import Flask, request, jsonify
+from google.cloud import storage
+import firebase_admin
+from firebase_admin import credentials, firestore
+from datetime import datetime
+import random
 
-import pandas as pd
+# Inisialisasi aplikasi Flask
+app = Flask(__name__)
 
-# Jumlah kelas sesuai kondisi kulit
-num_classes = 6  # Sesuaikan dengan jumlah kelas yang kamu miliki
+# Inisialisasi Firebase Admin SDK
+cred = credentials.Certificate(r"config/skincure-442717-firebase-adminsdk-d1trp-1ef62e74a2.json")  # Ganti dengan path ke kredensial Firebase
+firebase_admin.initialize_app(cred)
 
-# Initialize the app
-app = FastAPI()
+# Inisialisasi Firestore
+db = firestore.client()
 
-# Set up Google Cloud client
+# Set up Google Cloud Storage client
 storage_client = storage.Client()
-firestore_client = firestore.Client()
 
-# Define paths
-bucket_name = "skincure-bucket1"
-model_path = "modelh5/cnn_model.h5"
-local_model_path = 'cnn_model.h5'
+# Bucket dan file model
+BUCKET_NAME = "skincure-bucket1"
+MODEL_PATH = "model/model.h5"
+LOCAL_MODEL_PATH = "local_model.h5"  # Path lokal untuk menyimpan model sementara
 
-# Registrasi layer CustomCNN
-get_custom_objects()['CustomCNN'] = CustomCNN
-
-# Fungsi untuk mendownload model dari GCS
-def download_blob(bucket_name, source_blob_name, local_model_path):
-    storage_client = storage.Client()
+# Fungsi untuk mengunduh model dari GCS
+def download_model_from_gcs(bucket_name, model_path, local_path):
     bucket = storage_client.bucket(bucket_name)
-    blob = bucket.blob(source_blob_name)
-    blob.download_to_filename(destination_file_name)
-    print(f"Downloaded {source_blob_name} to {destination_file_name}.")
+    blob = bucket.blob(model_path)
+    # Unduh model dari GCS dan simpan sebagai file lokal
+    blob.download_to_filename(local_path)
+    print(f"Model downloaded to {local_path}")
 
-if not os.path.exists(local_model_path):
-    print("Model file not found locally. Downloading from GCS...")
-    download_blob(bucket_name, source_blob_name, destination_file_name)
-else:
-    print("Model file found locally.")
+# Fungsi untuk memuat model ke memori dari file lokal
+def load_model_from_gcs():
+    # Download model terlebih dahulu ke path lokal
+    download_model_from_gcs(BUCKET_NAME, MODEL_PATH, LOCAL_MODEL_PATH)
     
-# Fungsi untuk memuat model dari GCS
-def load_model_from_gcs(bucket_name, model_path):
-    download_blob(bucket_name, model_path, local_model_path)
-
-    # Pastikan model berhasil diunduh sebelum diload
-    if not os.path.exists(local_model_path):
-        raise FileNotFoundError(f"Model file {local_model_path} not found after downloading.")
-    
-    model = load_model(local_model_path, custom_objects={'CustomCNN': CustomCNN})
+    # Muat model menggunakan TensorFlow
+    model = tf.keras.models.load_model(LOCAL_MODEL_PATH)
+    print("Model berhasil dimuat.")
     return model
 
-# Load the model (only once)
-model = load_model_from_gcs(bucket_name, model_path)
-print(f"Model input shape: {model.input_shape}")
+# Muat model saat aplikasi Flask dimulai
+model = load_model_from_gcs()
 
-# Class to accept input image
-class ImageData(BaseModel):
-    image: str  # Base64 encoded image string
-
-# Dictionary for disease information
-skin_descript = pd.DataFrame({
-    'kondisi': ['Acne', 'Carcinoma', 'Eczema', 'Keratosis', 'Milia', 'Rosacea'],
-    'penjelasan': ['Acne description', 'Carcinoma description', 'Eczema description', 
-                   'Keratosis description', 'Milia description', 'Rosacea description'],
-    'penyebab': ['Acne causes', 'Carcinoma causes', 'Eczema causes', 
-                 'Keratosis causes', 'Milia causes', 'Rosacea causes'],
-    'pengobatan': ['Acne treatment', 'Carcinoma treatment', 'Eczema treatment', 
-                   'Keratosis treatment', 'Milia treatment', 'Rosacea treatment'],
-    'pencegahan': ['Acne prevention', 'Carcinoma prevention', 'Eczema prevention', 
-                   'Keratosis prevention', 'Milia prevention', 'Rosacea prevention']
-})
-
-disease_info = {
-    row['kondisi']: {
-        "penjelasan": row['penjelasan'],
-        "penyebab": row['penyebab'],
-        "pengobatan": row['pengobatan'],
-        "pencegahan": row['pencegahan']
-    }
-    for _, row in skin_descript.iterrows()
-}
-
-# Class names for your model
-class_names = ['Acne', 'Carcinoma', 'Eczema', 'Keratosis', 'Milia', 'Rosacea']
-
-# Route to predict
-@app.post("/predict/")
-async def predict(data: ImageData):
+def get_description_by_condition(kondisi):
     try:
-        # Decode the image from base64
-        image_data = base64.b64decode(data.image)
-        np_arr = np.frombuffer(image_data, np.uint8)
-        img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+        descriptions_ref = db.collection("descriptions")
+        query = descriptions_ref.where("kondisi", "==", kondisi)
+        docs = list(query.stream())  # Konversi hasil query ke list
 
-        # Validate input shape
-        if img is None:
-            raise ValueError("Invalid image data")
-        if len(model.input_shape) != 4 or model.input_shape[1:] != (224, 224, 3):  # Sesuaikan ukuran input model
-            raise ValueError("Model input shape is not valid for this image")
+        # Debugging: Log hasil query
+        print(f"Querying Firestore for condition: {kondisi}")
+        print(f"Documents found: {len(docs)}")
 
-        # Preprocess the image
-        img = cv2.resize(img, (224, 224))  # Ganti ukuran (224, 224) sesuai model input
-        img = np.expand_dims(img, axis=0)  # Add batch dimension
-        img = img / 255.0  # Normalize the image
+        if not docs:
+            print(f"No matching documents found for condition: {kondisi}")
+            return {
+                "description": "Kulit Anda Sehat! Stay Healthy ya!",
+                "kondisi": "Healthy Skin",
+                "pencegahan": "No pencegahan available",
+                "pengobatan": "No pengobatan available",
+                "penjelasan": "No penjelasan available",
+                "penyebab": "No penyebab available"
+            }
 
-        # Predict using the model
-        predictions = model.predict(img)
-        predicted_class = np.argmax(predictions, axis=1)
+        # Ambil data dari dokumen pertama
+        data = docs[0].to_dict()
 
-        # Get result class and description
-        result = class_names[predicted_class[0]]
-        description = disease_info[result]
+        # Debugging: Log data yang diambil dari Firestore
+        print(f"Fetched description data: {data}")
 
-        # Save the result in Firestore
-        firestore_client.collection('predictions').add({
-            'result': result,
-            'description': description,
-            'createdAt': firestore.SERVER_TIMESTAMP
-        })
+        # Bentuk deskripsi dari data yang ada
+        description = f"Kondisi: {kondisi}\n"
+        description += f"Penyebab: {data.get('penyebab', 'Tidak tersedia')}\n"
+        description += f"Pencegahan: {data.get('pencegahan', 'Tidak tersedia')}\n"
+        description += f"Pengobatan: {data.get('pengobatan', 'Tidak tersedia')}\n"
+        description += f"Penjelasan: {data.get('penjelasan', 'Tidak tersedia')}\n"
 
-        # Return prediction result with description
-        return JSONResponse(content={"result": result, "description": description})
-
+        return {
+            "description": description,
+            "kondisi": data.get("kondisi", kondisi),
+            "pencegahan": data.get("pencegahan", "Tidak tersedia"),
+            "pengobatan": data.get("pengobatan", "Tidak tersedia"),
+            "penjelasan": data.get("penjelasan", "Tidak tersedia"),
+            "penyebab": data.get("penyebab", "Tidak tersedia")
+        }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error processing the image: {str(e)}")
+        print(f"Error fetching description: {str(e)}")
+        return {
+            "description": "An error occurred while fetching description.",
+            "kondisi": kondisi,
+            "pencegahan": "No pencegahan available",
+            "pengobatan": "No pengobatan available",
+            "penjelasan": "No penjelasan available",
+            "penyebab": "No penyebab available"
+        }
 
-# Route to get the prediction history
-@app.get("/predict/history/")
-async def get_prediction_history():
-    predictions_ref = firestore_client.collection('predictions')
-    predictions = predictions_ref.stream()
+def save_prediction_to_firestore(result):
+    description_data = get_description_by_condition(result)  # Ambil data deskripsi
 
-    history = []
-    for prediction in predictions:
-        prediction_data = prediction.to_dict()
-        history.append({
-            "id": prediction.id,
-            "result": prediction_data.get("result"),
-            "description": prediction_data.get("description"),
-            "createdAt": prediction_data.get("createdAt")
-        })
+    prediction_id = str(random.randint(100000, 999999))  # Buat ID unik untuk prediksi
+    prediction_ref = db.collection("predictions").document(prediction_id)
 
-    return JSONResponse(content={"status": "success", "data": history})
+    prediction_data = {
+        "createdAt": datetime.now().isoformat(),
+        "description": description_data["description"],  # Gunakan deskripsi yang dibentuk
+        "id": prediction_id,
+        "result": result,
+        "status_code": 200
+    }
 
-# Optional: Health check endpoint
-@app.get("/health/")
-async def health_check():
-    return {"status": "OK"}
+    # Debugging
+    print(f"Saving prediction: {prediction_data}")
 
-# Main entry point to run the app
+    prediction_ref.set(prediction_data)
+    print(f"Hasil prediksi disimpan dengan ID: {prediction_id}")
+
+# Endpoint untuk menerima gambar dan melakukan prediksi
+@app.route("/predict", methods=["POST"])
+def predict():
+    if "file" not in request.files:
+        return jsonify({"error": "No file part"}), 400
+    
+    file = request.files["file"]
+
+    # Validasi tipe file
+    if file.filename == "" or not file.content_type.startswith("image/"):
+        return jsonify({"error": "Invalid file type, only image files are allowed"}), 400
+    
+    try:
+        # Baca gambar
+        img = tf.image.decode_image(file.read(), channels=3)
+        img = tf.image.resize(img, (224, 224))  # Sesuaikan ukuran dengan input model
+        img = tf.expand_dims(img, axis=0)  # Batch size 1
+
+        # Prediksi
+        predictions = model.predict(img)
+        predicted_class = tf.argmax(predictions, axis=1).numpy()[0]
+        class_names = ['Acne', 'Carcinoma', 'Eczema', 'Keratosis', 'Milia', 'Rosacea']  # Sesuaikan dengan kelas yang Anda miliki
+        
+        result = class_names[predicted_class]
+
+        # Simpan hasil prediksi ke Firestore
+        save_prediction_to_firestore(result)
+        
+        # Ambil deskripsi dari kondisi yang diprediksi
+        description = get_description_by_condition(result)
+        
+        return jsonify({
+            "status_code": 200,
+            "createdAt": datetime.now().isoformat(),
+            "description": description["description"],
+            "id": description["kondisi"],
+            "result": result
+        }), 200
+    except Exception as e:
+        return jsonify({"status_code": 500, "error": str(e)}), 500
+
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    app.run(host="0.0.0.0", port=8000, debug=True)

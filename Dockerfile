@@ -1,14 +1,7 @@
-FROM python:3.8-slim
-
-WORKDIR /app
-
-COPY requirements.txt /app/
-RUN pip install -r requirements.txt
-
-COPY . /app
-
-COPY ./model /app/model
-
+FROM node:18-alpine
+WORKDIR /usr/src/app
+COPY package*.json ./
+RUN npm install
+COPY . .
 EXPOSE 8080
-
-CMD ["python", "app.py"]
+CMD ["node", "src/app.js"]

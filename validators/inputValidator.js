@@ -1,4 +1,5 @@
 const { body, validationResult } = require('express-validator');
+const { check, validationResult } = require('express-validator');
 
 // Validator for news creation
 const validateNewsInput = [
@@ -22,8 +23,16 @@ const validateRequest = (req, res, next) => {
   next();
 };
 
+// Validator untuk body request
+const validateContactusData = [
+  check('name').notEmpty().withMessage('Name is required'),
+  check('description').notEmpty().withMessage('Description is required'),
+  check('image').notEmpty().withMessage('Image URL is required'),
+];
+
 module.exports = {
   validateNewsInput,
   validateAuthInput,
   validateRequest,
+  validateContactusData,
 };

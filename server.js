@@ -2,6 +2,7 @@ const express = require('express');
 const dotenv = require('dotenv');
 const newsRoutes = require('./src/routes/newsRoutes');
 const handleError = require('./src/utils/errorHandler');
+const contactusRoutes = require('./routes/contactusRoutes'); 
 
 dotenv.config();
 
@@ -11,6 +12,8 @@ const PORT = process.env.PORT || 8000;
 app.use(express.json());
 
 app.use('/api/news', newsRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/contactus', contactusRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

@@ -63,7 +63,7 @@ def get_description_by_condition(kondisi):
             return {
                 "description": "Kulit Anda Sehat! Stay Healthy ya!",
                 "kondisi": "Healthy Skin",
-                "pencegahan": "No pencegahan available",
+                "cara pencegahan": "No pencegahan available",
                 "pengobatan": "No pengobatan available",
                 "penjelasan": "No penjelasan available",
                 "penyebab": "No penyebab available"
@@ -77,18 +77,18 @@ def get_description_by_condition(kondisi):
 
         # Bentuk deskripsi dari data yang ada
         description = f"Kondisi: {kondisi}\n"
-        description += f"Penyebab: {data.get('penyebab', 'Tidak tersedia')}\n"
-        description += f"Pencegahan: {data.get('pencegahan', 'Tidak tersedia')}\n"
+        description += f"Penyebab: {data.get('penyebab ', 'Tidak tersedia')}\n"
+        description += f"Pencegahan: {data.get('cara pencegahan', 'Tidak tersedia')}\n"
         description += f"Pengobatan: {data.get('pengobatan', 'Tidak tersedia')}\n"
-        description += f"Penjelasan: {data.get('penjelasan', 'Tidak tersedia')}\n"
+        description += f"Penjelasan: {data.get('penjelasan ', 'Tidak tersedia')}\n"
 
         return {
             "description": description,
             "kondisi": data.get("kondisi", kondisi),
-            "pencegahan": data.get("pencegahan", "Tidak tersedia"),
+            "pencegahan": data.get("cara pencegahan", "Tidak tersedia"),
             "pengobatan": data.get("pengobatan", "Tidak tersedia"),
-            "penjelasan": data.get("penjelasan", "Tidak tersedia"),
-            "penyebab": data.get("penyebab", "Tidak tersedia")
+            "penjelasan": data.get("penjelasan ", "Tidak tersedia"),
+            "penyebab": data.get("penyebab ", "Tidak tersedia")
         }
     except Exception as e:
         print(f"Error fetching description: {str(e)}")
@@ -121,6 +121,8 @@ def save_prediction_to_firestore(result):
     prediction_ref.set(prediction_data)
     print(f"Hasil prediksi disimpan dengan ID: {prediction_id}")
 
+    return prediction_id
+
 # Endpoint untuk menerima gambar dan melakukan prediksi
 @app.route("/predict", methods=["POST"])
 def predict():
@@ -146,6 +148,10 @@ def predict():
         
         result = class_names[predicted_class]
 
+        # Simpan hasil prediksi ke Firestore dan ambil prediction_id
+        prediction_id = save_prediction_to_firestore(result)
+        print(f"Prediction ID received: {prediction_id}")  # Debugging
+
         # Simpan hasil prediksi ke Firestore
         save_prediction_to_firestore(result)
         
@@ -156,7 +162,7 @@ def predict():
             "status_code": 200,
             "createdAt": datetime.now().isoformat(),
             "description": description["description"],
-            "id": description["kondisi"],
+            "id": prediction_id,
             "result": result
         }), 200
     except Exception as e:

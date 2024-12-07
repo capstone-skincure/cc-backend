@@ -1,5 +1,10 @@
 const { body, validationResult } = require('express-validator');
-const { check, validationResult } = require('express-validator');
+
+// Validator for user authentication (for example, login)
+const validateAuthInput = [
+  body('email').isEmail().withMessage('Invalid email format'),
+  body('password').isLength({ min: 6 }).withMessage('Password should be at least 6 characters'),
+];
 
 // Validator for news creation
 const validateNewsInput = [
@@ -8,10 +13,10 @@ const validateNewsInput = [
   body('image').notEmpty().withMessage('Image URL is required'),
 ];
 
-// Validator for user authentication (for example, login)
-const validateAuthInput = [
-  body('email').isEmail().withMessage('Invalid email format'),
-  body('password').isLength({ min: 6 }).withMessage('Password should be at least 6 characters'),
+const validateContactusData = [
+  body('name').notEmpty().withMessage('Name is required'),
+  body('email').isEmail().withMessage('Valid email is required'),
+  body('message').notEmpty().withMessage('Message is required'),
 ];
 
 // Middleware to handle validation errors
@@ -22,13 +27,6 @@ const validateRequest = (req, res, next) => {
   }
   next();
 };
-
-// Validator untuk body request
-const validateContactusData = [
-  check('name').notEmpty().withMessage('Name is required'),
-  check('description').notEmpty().withMessage('Description is required'),
-  check('image').notEmpty().withMessage('Image URL is required'),
-];
 
 module.exports = {
   validateNewsInput,

@@ -1,8 +1,10 @@
 const express = require('express');
 const dotenv = require('dotenv');
-const newsRoutes = require('./src/routes/newsRoutes');
-const handleError = require('./src/utils/errorHandler');
+const newsRoutes = require('./routes/newsRoutes');
+const handleError = require('./utils/errorHandler');
 const contactusRoutes = require('./routes/contactusRoutes'); 
+const admin = require('./config/firebaseAdminConfig');
+const authRoutes = require('./routes/authRoutes');
 
 dotenv.config();
 
@@ -12,8 +14,8 @@ const PORT = process.env.PORT || 8000;
 app.use(express.json());
 
 app.use('/api/news', newsRoutes);
-app.use('/api/auth', authRoutes);
 app.use('/api/contactus', contactusRoutes);
+app.use('/api/auth', authRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

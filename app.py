@@ -25,7 +25,7 @@ storage_client = storage.Client()
 # Bucket dan file model
 BUCKET_NAME = "skincure-bucket1"
 MODEL_PATH = "model/model.h5"
-LOCAL_MODEL_PATH = "local_model.h5"  # Path lokal untuk menyimpan model sementara
+LOCAL_MODEL_PATH = "local_model.h5"
 
 # Fungsi untuk mengunduh model dari GCS
 def download_model_from_gcs(bucket_name, model_path, local_path):
@@ -48,11 +48,22 @@ def load_model_from_gcs():
 # Muat model saat aplikasi Flask dimulai
 model = load_model_from_gcs()
 
+# Fungsi untuk memverifikasi token Firebase
+def verify_firebase_token(id_token):
+    try:
+        # Verifikasi token Firebase
+        decoded_token = auth.verify_id_token(id_token)
+        uid = decoded_token['uid']
+        return uid
+    except Exception as e:
+        print(f"Token verification failed: {str(e)}")
+        return None
+    
 def get_description_by_condition(kondisi):
     try:
         descriptions_ref = db.collection("descriptions")
         query = descriptions_ref.where("kondisi", "==", kondisi)
-        docs = list(query.stream())  # Konversi hasil query ke list
+        docs = list(query.stream())
 
         # Debugging: Log hasil query
         print(f"Querying Firestore for condition: {kondisi}")
@@ -126,6 +137,17 @@ def save_prediction_to_firestore(result):
 # Endpoint untuk menerima gambar dan melakukan prediksi
 @app.route("/predict", methods=["POST"])
 def predict():
+    # Ambil token Firebase dari header Authorization
+    id_token = request.headers.get("Authorization")
+
+    if not id_token:
+        return jsonify({"error": "Authorization token missing"}), 400
+
+    # Verifikasi token
+    uid = verify_firebase_token(id_token)
+    if not uid:
+        return jsonify({"error": "Invalid or expired token"}), 401
+    
     if "file" not in request.files:
         return jsonify({"error": "No file part"}), 400
     
@@ -150,10 +172,6 @@ def predict():
 
         # Simpan hasil prediksi ke Firestore dan ambil prediction_id
         prediction_id = save_prediction_to_firestore(result)
-        print(f"Prediction ID received: {prediction_id}")  # Debugging
-
-        # Simpan hasil prediksi ke Firestore
-        save_prediction_to_firestore(result)
         
         # Ambil deskripsi dari kondisi yang diprediksi
         description = get_description_by_condition(result)
@@ -165,6 +183,7 @@ def predict():
             "id": prediction_id,
             "result": result
         }), 200
+    
     except Exception as e:
         return jsonify({"status_code": 500, "error": str(e)}), 500
 

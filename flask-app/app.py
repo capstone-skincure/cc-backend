@@ -5,13 +5,17 @@ import tensorflow as tf
 from flask import Flask, request, jsonify
 from google.cloud import storage
 import firebase_admin
-from firebase_admin import credentials, firestore
+from firebase_admin import credentials, firestore, auth
 from datetime import datetime
 import random
 from flask_cors import CORS
+import jwt
 
 # Inisialisasi aplikasi Flask
 app = Flask(__name__)
+
+# Mengizinkan CORS pada Flask
+CORS(app)
 
 # Inisialisasi Firebase Admin SDK
 cred = credentials.Certificate(r"C:\javascript-projects\skincure-flask\node-js-app\config\skincure-442717-firebase-adminsdk-d1trp-1ef62e74a2.json")
@@ -52,13 +56,16 @@ model = load_model_from_gcs()
 # Fungsi untuk memverifikasi token Firebase
 def verify_firebase_token(id_token):
     try:
-        # Verifikasi token Firebase
         decoded_token = auth.verify_id_token(id_token)
-        uid = decoded_token['uid']
-        return uid
+        print(f"Decoded token: {decoded_token}")
+        return decoded_token['uid']
+    except auth.InvalidIdTokenError as e:
+        print(f"Invalid token: {str(e)}")
+    except auth.ExpiredIdTokenError as e:
+        print(f"Expired token: {str(e)}")
     except Exception as e:
         print(f"Token verification failed: {str(e)}")
-        return None
+    return None
     
 def get_description_by_condition(kondisi):
     try:
@@ -140,11 +147,13 @@ def save_prediction_to_firestore(result):
 def predict():
     # Ambil token Firebase dari header Authorization
     id_token = request.headers.get("Authorization")
-
     if not id_token:
         return jsonify({"error": "Authorization token missing"}), 400
 
     # Verifikasi token
+    if id_token.startswith("Bearer "):
+        id_token = id_token.split("Bearer ")[1]
+
     uid = verify_firebase_token(id_token)
     if not uid:
         return jsonify({"error": "Invalid or expired token"}), 401
@@ -153,11 +162,6 @@ def predict():
         return jsonify({"error": "No file part"}), 400
     
     file = request.files["file"]
-
-    # Validasi tipe file
-    if file.filename == "" or not file.content_type.startswith("image/"):
-        return jsonify({"error": "Invalid file type, only image files are allowed"}), 400
-    
     try:
         # Baca gambar
         img = tf.image.decode_image(file.read(), channels=3)

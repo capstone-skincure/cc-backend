@@ -1,4 +1,4 @@
-const admin = require('../config/firebaseConfig'); // Pastikan path ke firebaseConfig benar
+const admin = require('../config/firebaseAdminConfig'); // Pastikan path ke firebaseConfig benar
 
 const authMiddleware = async (req, res, next) => {
   const token = req.headers['authorization']?.split('Bearer ')[1];

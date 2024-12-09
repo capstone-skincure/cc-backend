@@ -1,4 +1,4 @@
-const admin = require('firebase-admin');
+const admin = require('../config/firebaseAdminConfig');
 const db = admin.firestore();
 
 // Fungsi untuk mengambil berita dari Firestore

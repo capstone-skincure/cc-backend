@@ -1,4 +1,4 @@
-const admin = require('../config/firebaseConfig');
+const admin = require('../config/firebaseAdminConfig');
 
 // Menyimpan data contactus ke Firestore
 const createContactusInFirestore = async ({ name, email, message, userId }) => {

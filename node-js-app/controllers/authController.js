@@ -1,4 +1,4 @@
-const admin = require('../config/firebaseConfig');
+const admin = require('../config/firebaseAdminConfig');
 
 // Handle user registration (create new user)
 const registerUser = async (req, res) => {

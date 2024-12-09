@@ -10,7 +10,7 @@ const axios = require('axios');
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 8000;
+const PORT = process.env.PORT || 8001;
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true })); // Untuk menangani form-data jika perlu

@@ -8,12 +8,13 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 from datetime import datetime
 import random
+from flask_cors import CORS
 
 # Inisialisasi aplikasi Flask
 app = Flask(__name__)
 
 # Inisialisasi Firebase Admin SDK
-cred = credentials.Certificate(r"config/skincure-442717-firebase-adminsdk-d1trp-1ef62e74a2.json")  # Ganti dengan path ke kredensial Firebase
+cred = credentials.Certificate(r"C:\javascript-projects\skincure-flask\node-js-app\config\skincure-442717-firebase-adminsdk-d1trp-1ef62e74a2.json")
 firebase_admin.initialize_app(cred)
 
 # Inisialisasi Firestore

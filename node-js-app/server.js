@@ -6,6 +6,7 @@ const contactusRoutes = require('./routes/contactusRoutes');
 const admin = require('./config/firebaseAdminConfig');
 const authRoutes = require('./routes/authRoutes');
 const axios = require('axios');
+const fileUpload = require('express-fileupload');
 
 dotenv.config();
 
@@ -14,6 +15,8 @@ const PORT = process.env.PORT || 8001;
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true })); // Untuk menangani form-data jika perlu
+app.use(fileUpload()); // Menambahkan middleware untuk file upload
+const FormData = require('form-data');
 
 app.use('/api/news', newsRoutes);
 app.use('/api/contactus', contactusRoutes);

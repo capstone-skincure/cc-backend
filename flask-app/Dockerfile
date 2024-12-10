@@ -1,18 +1,20 @@
 FROM python:3.9-slim
 
+# Set working directory
 WORKDIR /app
 
-# Salin requirements.txt ke dalam image
-COPY requirements.txt ./
+# Install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Install dependensi
-RUN pip install -r requirements.txt
-
-# Salin semua file dari folder lokal ke dalam image
+# Copy the app
 COPY . .
 
-# Expose port untuk aplikasi Flask
-EXPOSE 8000
+# Set environment variable for Cloud Run to listen on port 8080
+ENV PORT 8080
 
-# Jalankan aplikasi Flask
+# Expose port 8080
+EXPOSE 8080
+
+# Run the Flask app
 CMD ["python", "app.py"]

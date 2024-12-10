@@ -10,6 +10,7 @@ from datetime import datetime
 import random
 from flask_cors import CORS
 import jwt
+from urllib.parse import quote  # Ganti import url_quote dengan quote dari urllib.parse
 
 # Inisialisasi aplikasi Flask
 app = Flask(__name__)
@@ -18,7 +19,7 @@ app = Flask(__name__)
 CORS(app)
 
 # Inisialisasi Firebase Admin SDK
-cred = credentials.Certificate(r"C:\javascript-projects\skincure-flask\node-js-app\config\skincure-442717-firebase-adminsdk-d1trp-1ef62e74a2.json")
+cred = credentials.Certificate("config/skincure-442717-firebase-adminsdk-d1trp-1ef62e74a2.json")
 firebase_admin.initialize_app(cred)
 
 # Inisialisasi Firestore
@@ -120,25 +121,23 @@ def get_description_by_condition(kondisi):
             "penyebab": "No penyebab available"
         }
 
-def save_prediction_to_firestore(result):
+def save_prediction_to_firestore(result, uid):
     description_data = get_description_by_condition(result)  # Ambil data deskripsi
 
     prediction_id = str(random.randint(100000, 999999))  # Buat ID unik untuk prediksi
-    prediction_ref = db.collection("predictions").document(prediction_id)
+    # Referensi ke subkoleksi prediksi berdasarkan uid
+    user_ref = db.collection("users").document(uid).collection("predictions").document(prediction_id)
 
     prediction_data = {
         "createdAt": datetime.now().isoformat(),
         "description": description_data["description"],  # Gunakan deskripsi yang dibentuk
         "id": prediction_id,
         "result": result,
-        "status_code": 200
+        "status_code": 200,
     }
 
-    # Debugging
-    print(f"Saving prediction: {prediction_data}")
-
-    prediction_ref.set(prediction_data)
-    print(f"Hasil prediksi disimpan dengan ID: {prediction_id}")
+    user_ref.set(prediction_data)
+    print(f"Hasil prediksi disimpan untuk pengguna {uid} dengan ID prediksi: {prediction_id}")
 
     return prediction_id
 
@@ -176,7 +175,7 @@ def predict():
         result = class_names[predicted_class]
 
         # Simpan hasil prediksi ke Firestore dan ambil prediction_id
-        prediction_id = save_prediction_to_firestore(result)
+        prediction_id = save_prediction_to_firestore(result, uid)
         
         # Ambil deskripsi dari kondisi yang diprediksi
         description = get_description_by_condition(result)
@@ -193,4 +192,5 @@ def predict():
         return jsonify({"status_code": 500, "error": str(e)}), 500
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8000, debug=True)
+    port = int(os.environ.get("PORT", 8080))  # Gunakan PORT dari environment
+    app.run(host="0.0.0.0", port=port)

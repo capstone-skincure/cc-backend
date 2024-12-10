@@ -1,8 +1,7 @@
-fastapi
-uvicorn
+Flask==2.3.0
+Werkzeug==2.3.0
 tensorflow
-opencv-python
+firebase-admin
 google-cloud-storage
-google-cloud-firestore
-pandas
-google-auth
+flask-cors
+jwt

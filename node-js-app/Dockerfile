@@ -1,20 +1,20 @@
-# Menggunakan image dasar dari Node.js
+# Gunakan image dasar untuk Node.js
 FROM node:16
 
-# Menentukan direktori kerja dalam container
-WORKDIR /app
+# Set direktori kerja dalam container
+WORKDIR /usr/src/app
 
-# Menyalin file package.json dan package-lock.json terlebih dahulu untuk menginstall dependensi
+# Salin package.json dan package-lock.json ke dalam container
 COPY package*.json ./
 
-# Menginstall dependensi aplikasi
+# Install dependencies yang dibutuhkan
 RUN npm install
 
-# Menyalin semua file sumber dari aplikasi ke dalam container
+# Salin seluruh kode aplikasi ke dalam container
 COPY . .
 
-# Mengekspos port aplikasi (sesuaikan dengan port yang digunakan oleh aplikasi Anda)
-EXPOSE 8001
+# Expose port yang digunakan oleh aplikasi
+EXPOSE 8080
 
-# Perintah untuk menjalankan aplikasi Node.js
+# Jalankan server menggunakan file server.js
 CMD ["node", "server.js"]

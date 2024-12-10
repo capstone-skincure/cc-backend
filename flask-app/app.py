@@ -46,10 +46,14 @@ def load_model_from_gcs():
     # Download model terlebih dahulu ke path lokal
     download_model_from_gcs(BUCKET_NAME, MODEL_PATH, LOCAL_MODEL_PATH)
     
-    # Muat model menggunakan TensorFlow
-    model = tf.keras.models.load_model(LOCAL_MODEL_PATH)
-    print("Model berhasil dimuat.")
-    return model
+    try:
+        # Muat model menggunakan TensorFlow
+        model = tf.keras.models.load_model(LOCAL_MODEL_PATH, compile=False)
+        print("Model berhasil dimuat.")
+        return model
+    except Exception as e:
+        print(f"Error loading model: {str(e)}")
+        raise e
 
 # Muat model saat aplikasi Flask dimulai
 model = load_model_from_gcs()
@@ -121,7 +125,7 @@ def get_description_by_condition(kondisi):
             "penyebab": "No penyebab available"
         }
 
-def save_prediction_to_firestore(result, uid):
+def save_prediction_to_firestore(result, uid, confidence_score):
     description_data = get_description_by_condition(result)  # Ambil data deskripsi
 
     prediction_id = str(random.randint(100000, 999999))  # Buat ID unik untuk prediksi
@@ -133,6 +137,7 @@ def save_prediction_to_firestore(result, uid):
         "description": description_data["description"],  # Gunakan deskripsi yang dibentuk
         "id": prediction_id,
         "result": result,
+        "confidence_score": confidence_score * 100,
         "status_code": 200,
     }
 
@@ -173,9 +178,10 @@ def predict():
         class_names = ['Acne', 'Carcinoma', 'Eczema', 'Keratosis', 'Milia', 'Rosacea']  # Sesuaikan dengan kelas yang Anda miliki
         
         result = class_names[predicted_class]
+        confidence_score = float(predictions[0][predicted_class])  # Skor probabilitas untuk kelas yang diprediksi
 
         # Simpan hasil prediksi ke Firestore dan ambil prediction_id
-        prediction_id = save_prediction_to_firestore(result, uid)
+        prediction_id = save_prediction_to_firestore(result, uid, confidence_score)
         
         # Ambil deskripsi dari kondisi yang diprediksi
         description = get_description_by_condition(result)
@@ -185,7 +191,9 @@ def predict():
             "createdAt": datetime.now().isoformat(),
             "description": description["description"],
             "id": prediction_id,
-            "result": result
+            "result": result,
+            "confidence_score": confidence_score * 100
+            
         }), 200
     
     except Exception as e:

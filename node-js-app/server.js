@@ -1,7 +1,6 @@
 const express = require('express');
 const dotenv = require('dotenv');
 const newsRoutes = require('./routes/newsRoutes');
-const contactusRoutes = require('./routes/contactusRoutes');
 const authRoutes = require('./routes/authRoutes');
 const handleError = require('./utils/errorHandler');
 const fileUpload = require('express-fileupload');
@@ -26,8 +25,54 @@ app.use(fileUpload());
 
 // Routes
 app.use('/api/news', newsRoutes);
-app.use('/api/contactus', contactusRoutes);
 app.use('/api/auth', authRoutes);
+
+// Contactus route
+app.post('/api/contactus', async (req, res) => {
+  console.log('Request received at /api/contactus');
+
+  try {
+    // Extract token from header
+    const tokenValue = req.headers['authorization']?.split(' ')[1]; // Bearer token
+    if (!tokenValue) {
+      console.error('No token provided.');
+      return res.status(400).json({ message: 'No token provided.' });
+    }
+
+    // Verify token and get UID
+    const decodedToken = await admin.auth().verifyIdToken(tokenValue);
+    const userId = decodedToken.uid;
+    console.log('User ID:', userId);
+
+    // Extract data from request body
+    const { name, email, message } = req.body;
+
+    // Validate request body
+    if (!name || !email || !message) {
+      console.error('Validation failed: Missing required fields.');
+      return res.status(400).json({ message: 'All fields (name, email, message) are required.' });
+    }
+
+    // Save contactus data to Firestore under users/<userId>/contactus
+    const contactusData = {
+      name,
+      email,
+      message,
+      createdAt: new Date().toISOString(),
+    };
+
+    const contactusRef = db.collection('users').doc(userId).collection('contactus');
+    await contactusRef.add(contactusData);
+    console.log('Contactus entry saved to Firestore.');
+
+    // Return success response
+    return res.status(201).json({ message: 'Contactus entry created successfully.' });
+
+  } catch (error) {
+    console.error('Error during contactus creation:', error.message);
+    return res.status(500).json({ message: 'Internal server error.', details: error.message });
+  }
+});
 
 // Prediction route
 app.post('/api/predict', async (req, res) => {

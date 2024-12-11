@@ -124,8 +124,19 @@ def get_description_by_condition(kondisi):
             "penjelasan": "No penjelasan available",
             "penyebab": "No penyebab available"
         }
+    
+def upload_image_to_gcs(bucket_name, file, filename):
+    client = storage.Client()
+    bucket = client.bucket(bucket_name)
+    blob = bucket.blob(filename)
 
-def save_prediction_to_firestore(result, uid, confidence_score):
+    file.stream.seek(0)
+    blob.upload_from_file(file.stream, content_type=file.content_type)
+
+    blob.make_public()
+    return blob.public_url
+    
+def save_prediction_to_firestore(result, uid, confidence_score, image_url):
     description_data = get_description_by_condition(result)  # Ambil data deskripsi
 
     prediction_id = str(random.randint(100000, 999999))  # Buat ID unik untuk prediksi
@@ -139,6 +150,7 @@ def save_prediction_to_firestore(result, uid, confidence_score):
         "result": result,
         "confidence_score": confidence_score * 100,
         "status_code": 200,
+        "image_url": image_url
     }
 
     user_ref.set(prediction_data)
@@ -167,22 +179,31 @@ def predict():
     
     file = request.files["file"]
     try:
+        # Simpan gambar ke GCS dan dapatkan URL-nya
+        filename = f"{uid}_{datetime.now().strftime('%Y%m%d%H%M%S')}.jpg"
+        image_url = upload_image_to_gcs(BUCKET_NAME, file, filename)
+
         # Baca gambar
+        file.stream.seek(0)
         img = tf.image.decode_image(file.read(), channels=3)
         img = tf.image.resize(img, (224, 224))  # Sesuaikan ukuran dengan input model
         img = tf.expand_dims(img, axis=0)  # Batch size 1
 
         # Prediksi
         predictions = model.predict(img)
-        predicted_class = tf.argmax(predictions, axis=1).numpy()[0]
+        predicted_class = int(tf.argmax(predictions, axis=1).numpy()[0])
         class_names = ['Acne', 'Carcinoma', 'Eczema', 'Keratosis', 'Milia', 'Rosacea']  # Sesuaikan dengan kelas yang Anda miliki
         
         result = class_names[predicted_class]
         confidence_score = float(predictions[0][predicted_class])  # Skor probabilitas untuk kelas yang diprediksi
 
         # Simpan hasil prediksi ke Firestore dan ambil prediction_id
-        prediction_id = save_prediction_to_firestore(result, uid, confidence_score)
+        prediction_id = save_prediction_to_firestore(result, uid, confidence_score, image_url)
         
+        # Tambahkan URL gambar ke dokumen Firestore
+        user_ref = db.collection("users").document(uid).collection("predictions").document(prediction_id)
+        user_ref.update({"image_url": image_url})
+
         # Ambil deskripsi dari kondisi yang diprediksi
         description = get_description_by_condition(result)
         
@@ -192,7 +213,8 @@ def predict():
             "description": description["description"],
             "id": prediction_id,
             "result": result,
-            "confidence_score": confidence_score * 100
+            "confidence_score": confidence_score * 100,
+            "image_url": image_url
             
         }), 200
     

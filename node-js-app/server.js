@@ -106,13 +106,16 @@ app.post('/api/predict', async (req, res) => {
 
     // Send file to Flask model
     console.log('Sending request to Flask...');
-    const response = await axios.post('https://skincure-flask-v1-1002330865172.asia-southeast1.run.app/predict', formData, {
+    const response = await axios.post('https://skincure-flask-v2-1002330865172.asia-southeast1.run.app/predict', formData, {
       headers: {
         'Authorization': `Bearer ${tokenValue}`,
         ...formData.getHeaders(),
       },
     });
     console.log('Response from Flask:', response.data);
+
+    // Extract Flask response data
+    const { result, description, status_code, confidence_score, image_url } = response.data;
 
     // Save prediction data to Firestore
     const predictionData = {
@@ -122,6 +125,7 @@ app.post('/api/predict', async (req, res) => {
       description: response.data.description,
       status_code: response.data.status_code,
       confidence_score: response.data.confidence_score,
+      image_url: response.data.image_url
     };
 
     const predictionsRef = db.collection('predictions');

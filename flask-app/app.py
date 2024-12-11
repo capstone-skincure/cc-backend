@@ -10,7 +10,7 @@ from datetime import datetime
 import random
 from flask_cors import CORS
 import jwt
-from urllib.parse import quote  # Ganti import url_quote dengan quote dari urllib.parse
+from urllib.parse import quote
 
 # Inisialisasi aplikasi Flask
 app = Flask(__name__)
@@ -37,17 +37,14 @@ LOCAL_MODEL_PATH = "local_model.h5"
 def download_model_from_gcs(bucket_name, model_path, local_path):
     bucket = storage_client.bucket(bucket_name)
     blob = bucket.blob(model_path)
-    # Unduh model dari GCS dan simpan sebagai file lokal
+    
     blob.download_to_filename(local_path)
     print(f"Model downloaded to {local_path}")
 
 # Fungsi untuk memuat model ke memori dari file lokal
 def load_model_from_gcs():
-    # Download model terlebih dahulu ke path lokal
     download_model_from_gcs(BUCKET_NAME, MODEL_PATH, LOCAL_MODEL_PATH)
-    
     try:
-        # Muat model menggunakan TensorFlow
         model = tf.keras.models.load_model(LOCAL_MODEL_PATH, compile=False)
         print("Model berhasil dimuat.")
         return model
@@ -78,7 +75,6 @@ def get_description_by_condition(kondisi):
         query = descriptions_ref.where("kondisi", "==", kondisi)
         docs = list(query.stream())
 
-        # Debugging: Log hasil query
         print(f"Querying Firestore for condition: {kondisi}")
         print(f"Documents found: {len(docs)}")
 
@@ -93,13 +89,9 @@ def get_description_by_condition(kondisi):
                 "penyebab": "No penyebab available"
             }
 
-        # Ambil data dari dokumen pertama
         data = docs[0].to_dict()
-
-        # Debugging: Log data yang diambil dari Firestore
         print(f"Fetched description data: {data}")
 
-        # Bentuk deskripsi dari data yang ada
         description = f"Kondisi: {kondisi}\n"
         description += f"Penyebab: {data.get('penyebab ', 'Tidak tersedia')}\n"
         description += f"Pencegahan: {data.get('cara pencegahan', 'Tidak tersedia')}\n"
@@ -137,15 +129,13 @@ def upload_image_to_gcs(bucket_name, file, filename):
     return blob.public_url
     
 def save_prediction_to_firestore(result, uid, confidence_score, image_url):
-    description_data = get_description_by_condition(result)  # Ambil data deskripsi
-
-    prediction_id = str(random.randint(100000, 999999))  # Buat ID unik untuk prediksi
-    # Referensi ke subkoleksi prediksi berdasarkan uid
+    description_data = get_description_by_condition(result)
+    prediction_id = str(random.randint(100000, 999999))
     user_ref = db.collection("users").document(uid).collection("predictions").document(prediction_id)
 
     prediction_data = {
         "createdAt": datetime.now().isoformat(),
-        "description": description_data["description"],  # Gunakan deskripsi yang dibentuk
+        "description": description_data["description"],
         "id": prediction_id,
         "result": result,
         "confidence_score": confidence_score * 100,
@@ -161,12 +151,10 @@ def save_prediction_to_firestore(result, uid, confidence_score, image_url):
 # Endpoint untuk menerima gambar dan melakukan prediksi
 @app.route("/predict", methods=["POST"])
 def predict():
-    # Ambil token Firebase dari header Authorization
     id_token = request.headers.get("Authorization")
     if not id_token:
         return jsonify({"error": "Authorization token missing"}), 400
 
-    # Verifikasi token
     if id_token.startswith("Bearer "):
         id_token = id_token.split("Bearer ")[1]
 
@@ -179,32 +167,26 @@ def predict():
     
     file = request.files["file"]
     try:
-        # Simpan gambar ke GCS dan dapatkan URL-nya
         filename = f"{uid}_{datetime.now().strftime('%Y%m%d%H%M%S')}.jpg"
         image_url = upload_image_to_gcs(BUCKET_NAME, file, filename)
 
-        # Baca gambar
         file.stream.seek(0)
         img = tf.image.decode_image(file.read(), channels=3)
-        img = tf.image.resize(img, (224, 224))  # Sesuaikan ukuran dengan input model
-        img = tf.expand_dims(img, axis=0)  # Batch size 1
+        img = tf.image.resize(img, (224, 224))
+        img = tf.expand_dims(img, axis=0)
 
-        # Prediksi
         predictions = model.predict(img)
         predicted_class = int(tf.argmax(predictions, axis=1).numpy()[0])
-        class_names = ['Acne', 'Carcinoma', 'Eczema', 'Keratosis', 'Milia', 'Rosacea']  # Sesuaikan dengan kelas yang Anda miliki
+        class_names = ['Acne', 'Carcinoma', 'Eczema', 'Keratosis', 'Milia', 'Rosacea']
         
         result = class_names[predicted_class]
-        confidence_score = float(predictions[0][predicted_class])  # Skor probabilitas untuk kelas yang diprediksi
-
-        # Simpan hasil prediksi ke Firestore dan ambil prediction_id
-        prediction_id = save_prediction_to_firestore(result, uid, confidence_score, image_url)
+        confidence_score = float(predictions[0][predicted_class])
         
-        # Tambahkan URL gambar ke dokumen Firestore
+        prediction_id = save_prediction_to_firestore(result, uid, confidence_score, image_url)
+
         user_ref = db.collection("users").document(uid).collection("predictions").document(prediction_id)
         user_ref.update({"image_url": image_url})
 
-        # Ambil deskripsi dari kondisi yang diprediksi
         description = get_description_by_condition(result)
         
         return jsonify({

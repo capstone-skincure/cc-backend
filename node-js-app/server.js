@@ -9,16 +9,13 @@ const FormData = require('form-data');
 const admin = require('firebase-admin');
 const { Firestore } = require('@google-cloud/firestore');
 
-// Load environment variables
 dotenv.config();
 
-// Initialize Firestore
 const db = new Firestore();
 
 const app = express();
 const PORT = process.env.PORT || 8080;
 
-// Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(fileUpload());
@@ -32,28 +29,23 @@ app.post('/api/contactus', async (req, res) => {
   console.log('Request received at /api/contactus');
 
   try {
-    // Extract token from header
-    const tokenValue = req.headers['authorization']?.split(' ')[1]; // Bearer token
+    const tokenValue = req.headers['authorization']?.split(' ')[1];
     if (!tokenValue) {
       console.error('No token provided.');
       return res.status(400).json({ message: 'No token provided.' });
     }
 
-    // Verify token and get UID
     const decodedToken = await admin.auth().verifyIdToken(tokenValue);
     const userId = decodedToken.uid;
     console.log('User ID:', userId);
 
-    // Extract data from request body
     const { name, email, message } = req.body;
 
-    // Validate request body
     if (!name || !email || !message) {
       console.error('Validation failed: Missing required fields.');
       return res.status(400).json({ message: 'All fields (name, email, message) are required.' });
     }
 
-    // Save contactus data to Firestore under users/<userId>/contactus
     const contactusData = {
       name,
       email,
@@ -65,7 +57,6 @@ app.post('/api/contactus', async (req, res) => {
     await contactusRef.add(contactusData);
     console.log('Contactus entry saved to Firestore.');
 
-    // Return success response
     return res.status(201).json({ message: 'Contactus entry created successfully.' });
 
   } catch (error) {
@@ -79,7 +70,6 @@ app.post('/api/predict', async (req, res) => {
   console.log('Request received at /api/predict');
 
   try {
-    // Check for file in the request
     if (!req.files || !req.files.file) {
       console.error('No file provided.');
       return res.status(400).json({ message: 'No file provided.' });
@@ -88,23 +78,19 @@ app.post('/api/predict', async (req, res) => {
     const file = req.files.file;
     console.log('File received:', file.name);
 
-    // Extract token from header
-    const tokenValue = req.headers['authorization']?.split(' ')[1]; // Bearer token
+    const tokenValue = req.headers['authorization']?.split(' ')[1];
     if (!tokenValue) {
       console.error('No token provided.');
       return res.status(400).json({ message: 'No token provided.' });
     }
 
-    // Verify token and get UID
     const decodedToken = await admin.auth().verifyIdToken(tokenValue);
     const userId = decodedToken.uid;
     console.log('User ID:', userId);
 
-    // Prepare file data for Flask model
     const formData = new FormData();
     formData.append('file', file.data, file.name);
 
-    // Send file to Flask model
     console.log('Sending request to Flask...');
     const response = await axios.post('https://skincure-flask-v2-1002330865172.asia-southeast1.run.app/predict', formData, {
       headers: {
@@ -114,10 +100,8 @@ app.post('/api/predict', async (req, res) => {
     });
     console.log('Response from Flask:', response.data);
 
-    // Extract Flask response data
     const { result, description, status_code, confidence_score, image_url } = response.data;
 
-    // Save prediction data to Firestore
     const predictionData = {
       uid: userId,
       result: response.data.result,
@@ -132,7 +116,6 @@ app.post('/api/predict', async (req, res) => {
     await predictionsRef.add(predictionData);
     console.log('Prediction saved to Firestore.');
 
-    // Return Flask response to client
     return res.status(200).json(response.data);
 
   } catch (error) {
@@ -152,19 +135,16 @@ app.post('/api/predict', async (req, res) => {
 // Get prediction histories
 app.get('/api/predict/histories', async (req, res) => {
   try {
-    // Get token from header
     const tokenValue = req.headers['authorization']?.split(' ')[1];
     if (!tokenValue) {
       console.error('No token provided.');
       return res.status(400).json({ message: 'No token provided.' });
     }
 
-    // Verify token and get UID
     const decodedToken = await admin.auth().verifyIdToken(tokenValue);
     const userId = decodedToken.uid;
     console.log('User ID:', userId);
 
-    // Query Firestore for prediction history
     const predictionsRef = db.collection('predictions');
     const snapshot = await predictionsRef.where('uid', '==', userId).get();
 

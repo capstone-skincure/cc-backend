@@ -1,10 +1,9 @@
-const admin = require('../config/firebaseAdminConfig'); // Pastikan path ke firebaseConfig benar
+const admin = require('../config/firebaseAdminConfig');
 
 const authMiddleware = async (req, res, next) => {
   const token = req.headers['authorization']?.split('Bearer ')[1];
   const userId = req.headers['userid'];
 
-  // Jika token atau userId tidak ada
   if (!token || !userId) {
     return res.status(400).json({ message: 'Bad Request: Missing token or user ID' });
   }

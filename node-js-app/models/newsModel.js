@@ -4,8 +4,8 @@ const db = admin.firestore();
 // Fungsi untuk mengambil berita dari Firestore
 const getAllNewsFromFirestore = async () => {
   const newsSnapshot = await db.collection('news')
-    .orderBy('createdAt', 'desc')  // Mengurutkan berdasarkan waktu terbaru
-    .limit(10)  // Mengambil 10 berita terbaru
+    .orderBy('createdAt', 'desc')
+    .limit(10)
     .get();
 
   const newsList = [];

@@ -7,5 +7,3 @@ Diagram Alur Kerja
 4. Flask memproses gambar tersebut dengan model machine learning dan menghasilkan prediksi.
 5. Flask mengembalikan hasil prediksi ke Express.js.
 6. Express.js mengirimkan hasil prediksi ke Client.
-
-![Architecture](Architecture - SKINCURE.jpg)
